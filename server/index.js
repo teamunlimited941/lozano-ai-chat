@@ -1,19 +1,12 @@
-﻿import Fastify from "fastify";
-
+﻿// server/index.js
+import Fastify from "fastify";
 const app = Fastify({ logger: true });
 
-// health
 app.get("/health", async () => ({ ok: true, ts: Date.now() }));
 
-// simple request log
-app.addHook("onRequest", async (req, reply) => {
+// log every request so we see it in Railway logs
+app.addHook("onRequest", async (req) => {
   app.log.info({ method: req.method, url: req.url }, "incoming");
-});
-
-// catch-all (so we don't 404 while testing)
-app.all("/*", async (req, reply) => {
-  if (req.url === "/health") return; // handled above
-  return { ok: true, at: new Date().toISOString(), path: req.url };
 });
 
 const port = Number(process.env.PORT || 8080);
