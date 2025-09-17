@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "lozano-ai-chat",
   "version": "1.0.0",
   "private": true,
@@ -8,6 +8,8 @@
     "start": "node server/index.js"
   },
   "dependencies": {
-    "fastify": "^4.27.0"
+    "@prisma/client": "^6.16.2",
+    "fastify": "^4.27.0",
+    "prisma": "^6.16.2"
   }
 }
