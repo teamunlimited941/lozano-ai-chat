@@ -14,29 +14,40 @@
 
   // ---------- theme & config ----------
   const COLORS = {
-    brandDark: '#0f172a',
-    gold: '#f2c200',          // launcher button (yellow-gold)
-    userBubbleBg: '#2d2d2d',  // dark gray user bubble
+    headerBg: '#2d2d2d',       // dark gray for header + send
+    gold: '#f2c200',           // launcher (yellow-gold)
+    userBubbleBg: '#2d2d2d',   // dark gray user bubble
     userBubbleText: '#ffffff',
     agentBubbleBg: '#ffffff',
     agentBubbleText: '#1f2937',
     panelBg: '#ffffff',
     bodyBg: '#f7f7f7',
     border: '#e5e7eb',
+    placeholder: '#6b7280'
   };
-  const FONT_STACK = "Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'";
+  const FONT_STACK = "Inter, Segoe UI, Roboto, Helvetica, Arial, system-ui, -apple-system, 'Apple Color Emoji', 'Segoe UI Emoji'";
 
   const AGENT_NAME = 'Maria • Lozano Construction';
   const API  = 'https://lozano-ai-chat-production.up.railway.app/api/chat';
   const SIGN = 'widget_dev';
 
-  // Auto-open once per visit (suppresses until tab/window is closed)
+  // Auto-open once per visit
   const AUTO_OPEN_DELAY_MS = 1500;
   const KEY_SUPPRESS_THIS_VISIT = 'lozano_chat_suppress_this_visit';
 
   onReady(() => {
-    // prevent duplicate injection
     if (document.getElementById('lozano-chat-launcher')) return;
+
+    // Inject strong styles so Elementor/theme can’t override
+    const css = `
+#lozano-chat-panel, #lozano-chat-panel * { font-family: ${FONT_STACK} !important; }
+#lozano-chat-header { background: ${COLORS.headerBg} !important; color: #fff !important; }
+#lozano-send { background: ${COLORS.headerBg} !important; border-color: ${COLORS.headerBg} !important; color: #fff !important; }
+#lozano-textarea { color: #111 !important; background: #fff !important; }
+#lozano-textarea::placeholder { color: ${COLORS.placeholder} !important; opacity: 1 !important; }
+#lozano-launcher { background: ${COLORS.gold} !important; color: #111 !important; }
+`;
+    document.head.appendChild(h('style', {}, [css]));
 
     let open = false;
     let msgs = [];
@@ -44,19 +55,16 @@
 
     // ---------- launcher ----------
     const launcher = h('button', {
-      id: 'lozano-chat-launcher',
+      id: 'lozano-launcher',
       onclick: toggle,
       style: {
         position:'fixed', right:'16px', bottom:'16px',
         borderRadius:'9999px', padding:'14px 18px',
         boxShadow:'0 10px 25px rgba(0,0,0,.15)',
-        background: COLORS.gold, color:'#111', zIndex: 999999,
-        cursor:'pointer', border:'0', fontFamily: FONT_STACK, fontWeight:'600',
+        zIndex: 999999, cursor:'pointer', border:'0', fontWeight:'600',
         transition:'transform .2s ease'
       }
     }, ['Chat with us']);
-
-    // subtle attention nudge
     setTimeout(() => { launcher.style.transform = 'scale(1.04)'; setTimeout(()=> launcher.style.transform='scale(1)', 300); }, 1000);
 
     // ---------- panel ----------
@@ -69,18 +77,18 @@
         background: COLORS.panelBg, borderRadius:'16px',
         boxShadow:'0 20px 50px rgba(0,0,0,.2)',
         overflow:'hidden', display:'none', zIndex: 999999,
-        display:'flex', flexDirection:'column', fontFamily: FONT_STACK
+        display:'flex', flexDirection:'column'
       }
     });
 
     // ---------- header ----------
-    const header = h('div', { style: {
-      padding:'12px 16px', background: COLORS.brandDark, color:'#fff',
-      display:'flex', justifyContent:'space-between', alignItems:'center'
+    const header = h('div', { id:'lozano-chat-header', style: {
+      padding:'12px 16px', display:'flex',
+      justifyContent:'space-between', alignItems:'center'
     }}, [
       h('div', {}, [
         h('strong', { style:{ letterSpacing:'.2px' } }, ['Chat']),
-        h('div', { style:{ fontSize:'12px', opacity:.85, marginTop:'2px' }}, [AGENT_NAME])
+        h('div', { style:{ fontSize:'12px', opacity:.9, marginTop:'2px' }}, [AGENT_NAME])
       ]),
       h('button', { title:'Minimize', onclick: minimize, style: { color:'#fff', background:'transparent', border:'0', fontSize:'18px', cursor:'pointer' } }, ['×'])
     ]);
@@ -94,7 +102,7 @@
 
     // typing indicator
     const typing = h('div', { id:'lozano-typing', style: {
-      display:'none', margin:'6px 0', fontSize:'12px', color:'#6b7280'
+      display:'none', margin:'6px 0', fontSize:'12px', color:COLORS.placeholder
     }}, ['Maria is typing…']);
 
     // ---------- input ----------
@@ -104,6 +112,7 @@
       borderTop:`1px solid ${COLORS.border}`, background:'#fff', alignItems:'flex-end'
     }});
     const ta = h('textarea', {
+      id:'lozano-textarea',
       rows:'2',
       placeholder:'Type your message.',
       style: {
@@ -111,10 +120,7 @@
         border:`1px solid ${COLORS.border}`,
         borderRadius:'14px',
         padding:'10px 12px',
-        fontFamily: FONT_STACK,
         fontSize:'14px',
-        color:'#111',               // black text
-        background:'#fff',
         resize:'none', outline:'none',
         maxHeight:'120px', lineHeight:'1.35',
         boxShadow:'inset 0 1px 2px rgba(0,0,0,.04)'
@@ -128,11 +134,12 @@
       }
     });
     const send = h('button', {
+      id:'lozano-send',
       onclick: sendMsg,
       style: {
         padding:'10px 14px', borderRadius:'10px',
-        border:`1px solid ${COLORS.brandDark}`, background: COLORS.brandDark,
-        color:'#fff', fontFamily: FONT_STACK, cursor:'pointer', whiteSpace:'nowrap'
+        border:`1px solid ${COLORS.headerBg}`,
+        cursor:'pointer', whiteSpace:'nowrap'
       }
     }, ['Send']);
 
@@ -187,13 +194,12 @@
       return wrap;
     }
     function pushUser(t){ msgs.push({ role:'user', content:t }); body.appendChild(bubble(t, { right:true, bg:COLORS.userBubbleBg, color:COLORS.userBubbleText })); body.scrollTop = body.scrollHeight; }
-    function pushAgent(t){ msgs.push({ role:'assistant', content:t }); body.appendChild(bubble(t, { right:false, bg:COLORS.agentBubbleBg, color:COLORS.agentBubbleText, border:COLORS.border })); body.scrollTop = body.scrollHeight; }
+    function pushAgent(t){ msgs.push({ role:'assistant', content:t }); body.appendChild(bubble(t, { right:false, bg:COLORS.agentBubbleBg, color:COLORS.agentBubbleText, border:COLORS.border, color:COLORS.agentBubbleText })); body.scrollTop = body.scrollHeight; }
 
     // ---------- minimize / toggle / open ----------
     function minimize(){
       open = false;
       panel.style.display = 'none';
-      // suppress auto-open for the rest of this visit
       try { sessionStorage.setItem(KEY_SUPPRESS_THIS_VISIT, '1'); } catch {}
     }
     function toggle(){
@@ -204,7 +210,6 @@
     function openPanel(){
       panel.style.display = 'flex';
       if (msgs.length === 0) {
-        // softer, human opener
         pushAgent("Hi! This is Maria with Lozano Construction. What can I help you with?");
       }
     }
@@ -214,9 +219,7 @@
       let suppressed = false;
       try { suppressed = sessionStorage.getItem(KEY_SUPPRESS_THIS_VISIT) === '1'; } catch {}
       if (!suppressed) {
-        setTimeout(() => {
-          if (!open) { open = true; openPanel(); }
-        }, AUTO_OPEN_DELAY_MS);
+        setTimeout(() => { if (!open) { open = true; openPanel(); } }, AUTO_OPEN_DELAY_MS);
       }
     })();
 
@@ -227,7 +230,7 @@
       ta.value = ''; autoGrow();
       pushUser(text);
 
-      // typing indicator for realism
+      // typing indicator
       typing.style.display = 'block';
 
       const payload = { sessionId, url: location.href, messages: msgs };
@@ -248,5 +251,6 @@
     }
   });
 })();
+
 
 
