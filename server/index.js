@@ -167,5 +167,5 @@ app.post("/api/chat", async (req, reply) => {
 // ---------- Start server ----------
 const port = Number(process.env.PORT || 8080);
 app.listen({ port, host: "0.0.0.0" })
-  .then(() => app.log.info(\`API up on :\${port}\`))
+  .then(() => app.log.info(`API up on :${port}`))
   .catch((e) => { app.log.error(e); process.exit(1); });
