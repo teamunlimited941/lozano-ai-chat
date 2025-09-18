@@ -2,6 +2,24 @@
   const API = 'https://lozano-ai-chat-production.up.railway.app/api/chat';
   const SIGN = 'widget_dev';
 
+  // ---------- tiny chime (inline WAV) ----------
+  // 120ms soft beep; stored inline so we don't load external files.
+  const CHIME_SRC =
+    "data:audio/wav;base64,UklGRlQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAAAACAAACaW5mbyB3YXYgYmVlcAAA" +
+    "AAAAAAB/////AAAAAP///wAAAP///wAAAP7+/v7+/v7+/v7+/////wAAAAD///8AAAAA/v7+/////wAAAP///wAAAP///wAAAAAA";
+  let muted = localStorage.getItem('lozano_chat_muted') === '1';
+  const chimeEl = new Audio(CHIME_SRC);
+  chimeEl.volume = 0.3;
+
+  function playChime() {
+    if (muted) return;
+    try {
+      // Some browsers require reloading data URI to replay quickly
+      chimeEl.currentTime = 0;
+      chimeEl.play().catch(() => { /* ignore autoplay block */ });
+    } catch {}
+  }
+
   // ---------- helper ----------
   function h(tag, attrs = {}, kids = []) {
     const el = document.createElement(tag);
@@ -61,6 +79,37 @@
     }
   });
 
+  // Header with mute toggle
+  const muteBtn = h('button', {
+    onclick: () => {
+      muted = !muted;
+      localStorage.setItem('lozano_chat_muted', muted ? '1' : '0');
+      muteBtn.textContent = muted ? '🔕' : '🔔';
+    },
+    title: 'Sound on/off',
+    style: {
+      color: '#fff',
+      background: 'transparent',
+      border: 0,
+      fontSize: '18px',
+      cursor: 'pointer',
+      marginRight: '8px'
+    }
+  }, [muted ? '🔕' : '🔔']);
+
+  const closeBtn = h('button', {
+    onclick: toggle,
+    style: {
+      color: '#fff',
+      background: 'transparent',
+      border: '0',
+      fontSize: '18px',
+      cursor: 'pointer'
+    }
+  }, ['×']);
+
+  const headerRight = h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } }, [muteBtn, closeBtn]);
+
   const header = h('div', {
     style: {
       padding: '12px 16px',
@@ -74,16 +123,7 @@
     }
   }, [
     h('div', {}, ['Chat']),
-    h('button', {
-      onclick: toggle,
-      style: {
-        color: '#fff',
-        background: 'transparent',
-        border: '0',
-        fontSize: '18px',
-        cursor: 'pointer'
-      }
-    }, ['×'])
+    headerRight
   ]);
 
   const body = h('div', {
@@ -111,7 +151,8 @@
       fontSize: '14px',
       background: '#fff',
       color: '#000' // black text
-    }
+    },
+    onkeydown: (e) => { if (e.key === 'Enter') sendMsg(); }
   });
 
   const send = h('button', {
@@ -149,6 +190,7 @@
   function pushBot(t) {
     msgs.push({ role: 'assistant', content: t });
     draw('bot', t);
+    playChime();
   }
 
   function draw(who, text) {
@@ -202,6 +244,3 @@
     }
   });
 })();
-
-
-
