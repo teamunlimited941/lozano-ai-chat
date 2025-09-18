@@ -2,7 +2,7 @@
   const API = 'https://lozano-ai-chat-production.up.railway.app/api/chat';
   const SIGN = 'widget_dev';
 
-  // ---------- avatar (replace with your own image URL anytime) ----------
+  // ---------- avatar (replace with real image if you want) ----------
   const AVATAR =
     "data:image/svg+xml;charset=utf-8," +
     encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'>
@@ -11,7 +11,7 @@
       <path d='M12 56c4-10 14-14 20-14s16 4 20 14' fill='#111'/>
     </svg>`);
 
-  // ---------- tiny chime (inline WAV) ----------
+  // ---------- chime ----------
   const CHIME_SRC =
     "data:audio/wav;base64,UklGRlQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAAAACAAACaW5mbyB3YXYgYmVlcAAA" +
     "AAAAAAB/////AAAAAP///wAAAP///wAAAP7+/v7+/v7+/v7+/////wAAAAD///8AAAAA/v7+/////wAAAP///wAAAP///wAAAAAA";
@@ -19,6 +19,28 @@
   const chimeEl = new Audio(CHIME_SRC);
   chimeEl.volume = 0.3;
   function playChime(){ if(!muted){ try{ chimeEl.currentTime=0; chimeEl.play().catch(()=>{});}catch{}} }
+
+  // ---------- typing animation CSS ----------
+  const style = document.createElement('style');
+  style.textContent = `
+  @keyframes blink {
+    0% { opacity: .2; }
+    20% { opacity: 1; }
+    100% { opacity: .2; }
+  }
+  .lozano-typing-dot {
+    display: inline-block;
+    margin: 0 2px;
+    width: 6px;
+    height: 6px;
+    background-color: #fff;
+    border-radius: 50%;
+    animation: blink 1.4s infinite both;
+  }
+  .lozano-typing-dot:nth-child(2) { animation-delay: .2s; }
+  .lozano-typing-dot:nth-child(3) { animation-delay: .4s; }
+  `;
+  document.head.appendChild(style);
 
   // ---------- helper ----------
   function h(tag, attrs = {}, kids = []) {
@@ -48,7 +70,7 @@
       borderRadius: '9999px',
       padding: '14px 18px',
       boxShadow: '0 10px 25px rgba(0,0,0,.15)',
-      background: '#FFD700', // gold
+      background: '#FFD700',
       color: '#000',
       fontWeight: '600',
       fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif',
@@ -68,7 +90,7 @@
       maxWidth: '95vw',
       height: '540px',
       maxHeight: '70vh',
-      background: '#1e1e1e', // dark gray
+      background: '#1e1e1e',
       borderRadius: '16px',
       boxShadow: '0 20px 50px rgba(0,0,0,.2)',
       overflow: 'hidden',
@@ -115,7 +137,7 @@
   const body = h('div', {
     style: {
       padding:'12px',
-      height:'calc(100% - 120px)', // header + input area
+      height:'calc(100% - 120px)',
       overflowY:'auto',
       fontSize:'14px',
       lineHeight:'1.4',
@@ -123,7 +145,7 @@
     }
   });
 
-  // input area (fix cut-off with box-sizing)
+  // input area
   const inputWrap = h('div', {
     style: { display:'flex', gap:'8px', padding:'12px', background:'#2b2b2b', boxSizing:'border-box' }
   });
@@ -149,7 +171,7 @@
       padding:'10px 14px',
       borderRadius:'10px',
       border:'none',
-      background:'#FFD700', // gold
+      background:'#FFD700',
       color:'#000',
       fontWeight:'600',
       cursor:'pointer',
@@ -160,6 +182,29 @@
   inputWrap.append(input, send);
   panel.append(header, body, inputWrap);
   document.body.append(launcher, panel);
+
+  // ---------- typing indicator ----------
+  function showTyping(){
+    const typing = h('div',{id:'lozano-typing',style:{margin:'8px 0',textAlign:'left'}},[
+      h('span',{style:{
+        display:'inline-flex',
+        alignItems:'center',
+        padding:'8px 10px',
+        borderRadius:'10px',
+        background:'#333',
+        color:'#fff'
+      }},[
+        h('span',{class:'lozano-typing-dot'}),
+        h('span',{class:'lozano-typing-dot'}),
+        h('span',{class:'lozano-typing-dot'})
+      ])
+    ]);
+    body.append(typing); body.scrollTop = body.scrollHeight;
+  }
+  function removeTyping(){
+    const el = document.getElementById('lozano-typing');
+    if(el) el.remove();
+  }
 
   // ---------- behavior ----------
   function toggle(){
@@ -206,21 +251,27 @@
         body: JSON.stringify(payload)
       });
       const data = await res.json();
-      if (data.answer) pushBot(data.answer);
-      // You can also read data.meta.language / data.meta.english_log here if you ever want UI badges/logs.
+      if (data.answer) {
+        showTyping();
+        const delay = Math.min(3000, 800 + data.answer.length * 20); // longer msg = longer delay
+        setTimeout(()=>{
+          removeTyping();
+          pushBot(data.answer);
+        }, delay);
+      }
     } catch {
       pushBot('Hmm, connection issue. Try again in a moment.');
     }
   }
 
-  // ---------- auto open first visit ----------
+  // ---------- auto open ----------
   window.addEventListener('load', () => {
     const wasOpen = localStorage.getItem('lozano_chat_open') === '1';
     if (!wasOpen && !localStorage.getItem('lozano_chat_seen')) {
-      toggle(); // auto-open on first visit
+      toggle();
       localStorage.setItem('lozano_chat_seen', '1');
     } else if (wasOpen) {
-      toggle(); // reopen if it was open before
+      toggle();
     }
   });
 })();
