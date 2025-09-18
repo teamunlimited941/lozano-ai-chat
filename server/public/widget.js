@@ -1,8 +1,5 @@
 ﻿(() => {
-  // --- run after DOM is ready ---
   function onReady(fn){ if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn); else fn(); }
-
-  // --- tiny element helper ---
   function h(tag, attrs = {}, children = []) {
     const el = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs || {})) {
@@ -16,15 +13,15 @@
 
   const API  = 'https://lozano-ai-chat-production.up.railway.app/api/chat';
   const SIGN = 'widget_dev';
+  const AGENT_NAME = 'Maria • Lozano Construction';
 
   onReady(() => {
-    if (document.getElementById('lozano-chat-launcher')) return; // avoid duplicates
+    if (document.getElementById('lozano-chat-launcher')) return;
 
     let open = false;
     let msgs = [];
     const sessionId = crypto.randomUUID();
 
-    // --- launcher button ---
     const launcher = h('button', {
       id: 'lozano-chat-launcher',
       onclick: toggle,
@@ -37,7 +34,6 @@
       }
     }, ['Chat with Lozano AI']);
 
-    // --- panel container (desktop defaults) ---
     const panel = h('div', {
       id: 'lozano-chat-panel',
       style: {
@@ -57,51 +53,64 @@
       fontFamily:'system-ui'
     }}, [
       h('div', {}, [
-        h('strong', {}, ['Lozano AI']),
-        h('div', { style:{ fontSize:'12px', opacity:.8 }}, ['Licensed FL GC • CGC1532629'])
+        h('strong', {}, ['Chat']),
+        h('div', { style:{ fontSize:'12px', opacity:.8 }}, [AGENT_NAME])
       ]),
       h('button', { onclick: toggle, style: { color:'#fff', background:'transparent', border:'0', fontSize:'18px', cursor:'pointer' } }, ['×'])
     ]);
 
     const body = h('div', { id:'lozano-chat-body', style: {
       flex:'1', padding:'12px', overflow:'auto',
-      fontFamily:'system-ui', fontSize:'14px', lineHeight:'1.4', WebkitOverflowScrolling:'touch'
+      fontFamily:'system-ui', fontSize:'14px', lineHeight:'1.4', WebkitOverflowScrolling:'touch',
+      background:'#fafafa'
     }});
 
-    // input area (with safe-area padding for iOS)
+    // Input as TEXTAREA (like Messages), with Shift+Enter for newline
     const inputWrap = h('div', { style: {
-      display:'flex', gap:'8px', padding:'12px',
-      paddingBottom:'calc(12px + env(safe-area-inset-bottom))',
-      borderTop:'1px solid #e5e7eb', background:'#f9fafb'
+      display:'flex', gap:'8px', padding:'10px',
+      paddingBottom:'calc(10px + env(safe-area-inset-bottom))',
+      borderTop:'1px solid #e5e7eb', background:'#fff', alignItems:'flex-end'
     }});
-    const input = h('input', {
-      placeholder:'Tell us about your project (city/ZIP helps!)',
-      style: { flex:'1', border:'1px solid #e5e7eb', borderRadius:'10px', padding:'10px', fontFamily:'inherit' }
+    const ta = h('textarea', {
+      rows:'2',
+      placeholder:'Type your message… (city/ZIP helps)',
+      style: {
+        flex:'1', border:'1px solid #e5e7eb', borderRadius:'14px',
+        padding:'10px 12px', fontFamily:'inherit', resize:'none', outline:'none',
+        maxHeight:'120px', lineHeight:'1.3', boxShadow:'inset 0 1px 2px rgba(0,0,0,.04)'
+      },
+      oninput: autoGrow,
+      onkeydown: (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendMsg();
+        }
+      }
     });
     const send = h('button', {
       onclick: sendMsg,
-      style: { padding:'10px 14px', borderRadius:'10px', border:'1px solid #0f172a', background:'#0f172a', color:'#fff', fontFamily:'inherit', cursor:'pointer' }
+      style: {
+        padding:'10px 14px', borderRadius:'10px',
+        border:'1px solid #0f172a', background:'#0f172a',
+        color:'#fff', fontFamily:'inherit', cursor:'pointer', whiteSpace:'nowrap'
+      }
     }, ['Send']);
 
-    inputWrap.append(input, send);
+    inputWrap.append(ta, send);
     panel.append(header, body, inputWrap);
     document.body.append(launcher, panel);
 
-    // --- mobile responsive behavior ---
+    // Mobile fill
     function applyMobileLayout() {
       const isMobile = window.matchMedia('(max-width: 640px)').matches;
       if (isMobile) {
-        // fill the screen nicely on phones; use 100dvh for keyboard-safe height
         Object.assign(panel.style, {
-          right: '0', bottom: '0', left: '0',
-          width: '100vw', maxWidth: '100vw',
-          height: 'calc(100dvh - 0px)',
-          maxHeight: '100dvh',
-          borderRadius: '12px 12px 0 0'
+          right:'0', bottom:'0', left:'0',
+          width:'100vw', maxWidth:'100vw',
+          height:'calc(100dvh - 0px)', maxHeight:'100dvh',
+          borderRadius:'12px 12px 0 0'
         });
-        // keep launcher a bit higher so it doesn't overlap mobile browser bars
         launcher.style.bottom = '20px';
-        launcher.style.right  = '16px';
       } else {
         Object.assign(panel.style, {
           right:'16px', bottom:'78px', left:'',
@@ -110,48 +119,51 @@
           borderRadius:'16px'
         });
         launcher.style.bottom = '16px';
-        launcher.style.right  = '16px';
       }
     }
     applyMobileLayout();
-
-    // handle orientation / resize / keyboard open
     window.addEventListener('resize', applyMobileLayout);
     window.addEventListener('orientationchange', applyMobileLayout);
+    ta.addEventListener('focus', () => setTimeout(() => body.scrollTop = body.scrollHeight, 50));
 
-    // keep input visible when focusing (mobile keyboards)
-    input.addEventListener('focus', () => {
-      setTimeout(() => body.scrollTop = body.scrollHeight, 50);
-    });
+    function autoGrow(){
+      ta.style.height = 'auto';
+      ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+    }
+
+    // UI helpers
+    function draw(who, text){
+      const wrap = h('div', { style: { margin:'8px 0', display:'flex', justifyContent: (who==='me'?'flex-end':'flex-start') } }, [
+        h('span', { style: {
+          display:'inline-block', padding:'8px 12px', borderRadius:'14px',
+          maxWidth:'85%',
+          background: (who === 'me' ? '#DCF1FF' : '#fff'),
+          border: (who === 'me' ? '1px solid #cfe7fb' : '1px solid #eee'),
+          color:'#0f172a', boxShadow:'0 1px 2px rgba(0,0,0,.04), 0 6px 16px rgba(0,0,0,.04)'
+        }}, [text])
+      ]);
+      body.appendChild(wrap);
+      body.scrollTop = body.scrollHeight;
+    }
+    function pushUser(t){ msgs.push({ role:'user', content:t }); draw('me', t); }
+    function pushAgent(t){ msgs.push({ role:'assistant', content:t }); draw('bot', t); }
 
     function toggle(){
       open = !open;
       panel.style.display = open ? 'flex' : 'none';
       if (open && msgs.length === 0) {
-        pushBot('Hey! What are you planning — kitchen, bath, addition, roof/soffit, concrete, or something else?');
+        pushAgent("Hi! I’m Maria with Lozano Construction. What are you planning — kitchen, bath, addition, roofing/soffit, concrete, or something else? If you can share your city or ZIP, I’ll get you scheduled faster.");
       }
     }
 
-    function draw(who, text){
-      const bubble = h('div', { style: { margin:'8px 0', textAlign: (who === 'me' ? 'right':'left') } }, [
-        h('span', { style: {
-          display:'inline-block', padding:'8px 10px', borderRadius:'10px',
-          maxWidth:'85%', background: (who === 'me' ? '#e2e8f0' : '#f8fafc')
-        }}, [text])
-      ]);
-      body.appendChild(bubble);
-      body.scrollTop = body.scrollHeight;
-    }
-    function pushUser(t){ msgs.push({ role:'user', content:t }); draw('me', t); }
-    function pushBot(t){ msgs.push({ role:'assistant', content:t }); draw('bot', t); }
-
     async function sendMsg(){
-      const text = (input.value || '').trim();
+      const text = (ta.value || '').trim();
       if (!text) return;
-      input.value = '';
+      ta.value = ''; autoGrow();
       pushUser(text);
 
       const payload = { sessionId, url: location.href, messages: msgs };
+
       try {
         const res  = await fetch(API, {
           method:'POST',
@@ -159,12 +171,13 @@
           body: JSON.stringify(payload)
         });
         const data = await res.json();
-        if (data.answer) pushBot(data.answer);
-        if (data.persisted) pushBot('Got it — a project manager will text/email you shortly to lock a time. Anything else you want to add?');
+        if (data.answer) pushAgent(data.answer);
+        if (data.persisted) pushAgent('Perfect — I’ll text/email you shortly to lock a time.');
       } catch {
-        pushBot('Hmm, connection issue. Try again in a moment.');
+        pushAgent('Hmm, connection issue on my side. Mind trying again in a moment?');
       }
     }
   });
 })();
+
 
