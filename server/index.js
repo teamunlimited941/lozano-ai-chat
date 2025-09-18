@@ -1,4 +1,40 @@
-﻿// --- Maria's receptionist brain (answer-first, then politely collect info, then offer 2 time windows)
+﻿import Fastify from "fastify";
+import fastifyStatic from "@fastify/static";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import OpenAI from "openai";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// ---------- Create app first ----------
+const app = Fastify({ logger: true });
+
+// ---------- Static: serve /widget.js ----------
+app.register(fastifyStatic, {
+  root: join(__dirname, "public"),
+  prefix: "/",
+  cacheControl: true,
+});
+
+// ---------- Health ----------
+app.get("/health", async () => ({ ok: true, ts: Date.now() }));
+
+// ---------- CORS (for your WP site) ----------
+app.addHook("onRequest", async (req, reply) => {
+  reply.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+  reply.header("Access-Control-Allow-Headers", "Content-Type, x-widget-signature");
+});
+app.options("/*", async (_req, reply) => reply.code(204).send());
+
+// ---------- Diag ----------
+app.get("/diag", async () => ({
+  ok: true,
+  openaiKeyDetected: !!process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.startsWith("sk-"),
+  port: Number(process.env.PORT || 8080),
+}));
+
+// ---------- Maria's receptionist brain ----------
 const systemPrompt = `
 You are Maria, Lozano Construction’s AI Receptionist/Assistant (FL GC: CGC1532629).
 
@@ -42,14 +78,13 @@ Output format (STRICT JSON):
 }
 `;
 
-// --- Chat endpoint (robust JSON parsing + graceful fallback)
+// ---------- Chat endpoint ----------
 app.post("/api/chat", async (req, reply) => {
   try {
     const { messages = [], sessionId, url } = req.body || {};
     const openaiKey = process.env.OPENAI_API_KEY;
 
     if (!openaiKey) {
-      // friendly fallback if the key goes missing
       return reply.send({
         answer:
           "Absolutely—happy to help. Could I please have your full address (street, city, state, ZIP), the best phone number, and a good email for estimates? Then we can get you scheduled. Would tomorrow or Thursday work better—morning or late afternoon?",
@@ -57,9 +92,9 @@ app.post("/api/chat", async (req, reply) => {
       });
     }
 
-    const openai = new (await import("openai")).default({ apiKey: openaiKey });
+    const openai = new OpenAI({ apiKey: openaiKey });
 
-    // Few-shot to enforce “answer first”
+    // Few-shot to enforce answer-first
     const fewshot = [
       { role: "user", content: "Do you do decks?" },
       { role: "assistant", content: JSON.stringify({
@@ -101,37 +136,23 @@ app.post("/api/chat", async (req, reply) => {
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: chatMessages,
-      temperature: 0.4,           // a bit more consistent
+      temperature: 0.4,
       response_format: { type: "json_object" },
       max_tokens: 500,
     });
 
     const raw = completion.choices?.[0]?.message?.content || "{}";
 
-    // Be resilient: try JSON.parse; if it fails, try to extract a message; then final fallback
     let parsed;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      // If it sent plain text accidentally, use it
-      parsed = { message: String(raw || "").trim() };
-    }
+    try { parsed = JSON.parse(raw); }
+    catch { parsed = { message: String(raw || "").trim() }; }
 
-    let answer = (parsed && typeof parsed.message === "string" && parsed.message.trim())
-      ? parsed.message.trim()
-      : "";
+    const answer =
+      (parsed && typeof parsed.message === "string" && parsed.message.trim())
+        ? parsed.message.trim()
+        : "Happy to help. Could I please have your full address (street, city, state, ZIP), best phone, and a good email for estimates? Would tomorrow or Thursday work better—morning or late afternoon?";
 
-    if (!answer) {
-      // last-resort friendly reply
-      answer =
-        "Happy to help. Could I please have your full address (street, city, state, ZIP), best phone, and a good email for estimates? Would tomorrow or Thursday work better—morning or late afternoon?";
-    }
-
-    return reply.send({
-      answer,
-      persisted: false,
-      meta: { scratchpad: parsed?.scratchpad ?? null }
-    });
+    return reply.send({ answer, persisted: false, meta: { scratchpad: parsed?.scratchpad ?? null } });
 
   } catch (err) {
     req.log.error(err);
@@ -143,3 +164,8 @@ app.post("/api/chat", async (req, reply) => {
   }
 });
 
+// ---------- Start server ----------
+const port = Number(process.env.PORT || 8080);
+app.listen({ port, host: "0.0.0.0" })
+  .then(() => app.log.info(\`API up on :\${port}\`))
+  .catch((e) => { app.log.error(e); process.exit(1); });
