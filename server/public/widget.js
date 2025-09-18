@@ -20,32 +20,37 @@
     userBubbleText: '#ffffff',
     agentBubbleBg: '#ffffff',
     agentBubbleText: '#1f2937',
-    panelBg: '#ffffff',
     bodyBg: '#f7f7f7',
     border: '#e5e7eb',
     placeholder: '#6b7280'
   };
-  const FONT_STACK = "Inter, Segoe UI, Roboto, Helvetica, Arial, system-ui, -apple-system, 'Apple Color Emoji', 'Segoe UI Emoji'";
-
-  const AGENT_NAME = 'Maria • Lozano Construction';
   const API  = 'https://lozano-ai-chat-production.up.railway.app/api/chat';
   const SIGN = 'widget_dev';
-
-  // Auto-open once per visit
   const AUTO_OPEN_DELAY_MS = 1500;
   const KEY_SUPPRESS_THIS_VISIT = 'lozano_chat_suppress_this_visit';
+  const AGENT_NAME = 'Maria • Lozano Construction';
 
   onReady(() => {
-    if (document.getElementById('lozano-chat-launcher')) return;
+    if (document.getElementById('lozano-launcher')) return;
 
-    // Inject strong styles so Elementor/theme can’t override
+    // 1) Load Inter font (so Elementor/theme can't override)
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap';
+    document.head.appendChild(link);
+
+    // 2) Inject strong CSS overrides
     const css = `
-#lozano-chat-panel, #lozano-chat-panel * { font-family: ${FONT_STACK} !important; }
+#lozano-chat-panel, #lozano-chat-panel * {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+  font-size: 15px !important;
+  line-height: 1.5 !important;
+}
 #lozano-chat-header { background: ${COLORS.headerBg} !important; color: #fff !important; }
 #lozano-send { background: ${COLORS.headerBg} !important; border-color: ${COLORS.headerBg} !important; color: #fff !important; }
 #lozano-textarea { color: #111 !important; background: #fff !important; }
 #lozano-textarea::placeholder { color: ${COLORS.placeholder} !important; opacity: 1 !important; }
-#lozano-launcher { background: ${COLORS.gold} !important; color: #111 !important; }
+#lozano-launcher { background: ${COLORS.gold} !important; color: #111 !important; font-weight: 600 !important; }
 `;
     document.head.appendChild(h('style', {}, [css]));
 
@@ -61,7 +66,7 @@
         position:'fixed', right:'16px', bottom:'16px',
         borderRadius:'9999px', padding:'14px 18px',
         boxShadow:'0 10px 25px rgba(0,0,0,.15)',
-        zIndex: 999999, cursor:'pointer', border:'0', fontWeight:'600',
+        zIndex: 999999, cursor:'pointer', border:'0',
         transition:'transform .2s ease'
       }
     }, ['Chat with us']);
@@ -74,7 +79,7 @@
         position:'fixed', right:'16px', bottom:'78px',
         width:'360px', maxWidth:'95vw',
         height:'540px', maxHeight:'70vh',
-        background: COLORS.panelBg, borderRadius:'16px',
+        background:'#fff', borderRadius:'16px',
         boxShadow:'0 20px 50px rgba(0,0,0,.2)',
         overflow:'hidden', display:'none', zIndex: 999999,
         display:'flex', flexDirection:'column'
@@ -96,7 +101,7 @@
     // ---------- body ----------
     const body = h('div', { id:'lozano-chat-body', style: {
       flex:'1', padding:'12px', overflow:'auto',
-      fontSize:'14px', lineHeight:'1.45', WebkitOverflowScrolling:'touch',
+      WebkitOverflowScrolling:'touch',
       background: COLORS.bodyBg
     }});
 
@@ -120,17 +125,13 @@
         border:`1px solid ${COLORS.border}`,
         borderRadius:'14px',
         padding:'10px 12px',
-        fontSize:'14px',
         resize:'none', outline:'none',
-        maxHeight:'120px', lineHeight:'1.35',
+        maxHeight:'120px',
         boxShadow:'inset 0 1px 2px rgba(0,0,0,.04)'
       },
       oninput: autoGrow,
       onkeydown: (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          sendMsg();
-        }
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
       }
     });
     const send = h('button', {
@@ -173,10 +174,7 @@
     window.addEventListener('orientationchange', applyMobileLayout);
     ta.addEventListener('focus', () => setTimeout(() => body.scrollTop = body.scrollHeight, 50));
 
-    function autoGrow(){
-      ta.style.height = 'auto';
-      ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
-    }
+    function autoGrow(){ ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 120) + 'px'; }
 
     // ---------- bubbles ----------
     function bubble(text, opts){
@@ -194,7 +192,7 @@
       return wrap;
     }
     function pushUser(t){ msgs.push({ role:'user', content:t }); body.appendChild(bubble(t, { right:true, bg:COLORS.userBubbleBg, color:COLORS.userBubbleText })); body.scrollTop = body.scrollHeight; }
-    function pushAgent(t){ msgs.push({ role:'assistant', content:t }); body.appendChild(bubble(t, { right:false, bg:COLORS.agentBubbleBg, color:COLORS.agentBubbleText, border:COLORS.border, color:COLORS.agentBubbleText })); body.scrollTop = body.scrollHeight; }
+    function pushAgent(t){ msgs.push({ role:'assistant', content:t }); body.appendChild(bubble(t, { right:false, bg:COLORS.agentBubbleBg, color:COLORS.agentBubbleText, border:COLORS.border })); body.scrollTop = body.scrollHeight; }
 
     // ---------- minimize / toggle / open ----------
     function minimize(){
@@ -230,9 +228,7 @@
       ta.value = ''; autoGrow();
       pushUser(text);
 
-      // typing indicator
       typing.style.display = 'block';
-
       const payload = { sessionId, url: location.href, messages: msgs };
       try {
         const res  = await fetch(API, {
