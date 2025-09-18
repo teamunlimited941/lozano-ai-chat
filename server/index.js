@@ -184,10 +184,15 @@ app.post("/api/chat", async (req, reply) => {
     const guidance = `
 Use light, tasteful wit only if it helps rapport. Be fast and professional.
 Ask EXACTLY ONE follow-up this turn.
+
+LANGUAGE RULE (strict):
+- Detect the language from the MOST RECENT user message only.
+- If the user switches languages mid-chat, IMMEDIATELY switch your reply to that new language.
+- Do not translate the user's text; just respond in their language. Also produce the English log string.
+
 nextGoal=${nextGoal}
 ${availabilityHint}
 User refusals so far: ${refusals}. If they refused scheduling, do NOT push slots—ask permission first or keep helping.
-Reply in the user's language. ALSO include an English log string.
 Never ask for more than one detail at once. Never contradict stated availability.
 `;
 

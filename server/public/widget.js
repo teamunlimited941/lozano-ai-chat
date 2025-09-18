@@ -2,8 +2,7 @@
   const API = 'https://lozano-ai-chat-production.up.railway.app/api/chat';
   const SIGN = 'widget_dev';
 
-  // ---------- avatar ----------
-  // Replace with your hosted image if you like:
+  // ---------- avatar (replace with your own image URL anytime) ----------
   const AVATAR =
     "data:image/svg+xml;charset=utf-8," +
     encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'>
@@ -19,11 +18,7 @@
   let muted = localStorage.getItem('lozano_chat_muted') === '1';
   const chimeEl = new Audio(CHIME_SRC);
   chimeEl.volume = 0.3;
-
-  function playChime() {
-    if (muted) return;
-    try { chimeEl.currentTime = 0; chimeEl.play().catch(()=>{}); } catch {}
-  }
+  function playChime(){ if(!muted){ try{ chimeEl.currentTime=0; chimeEl.play().catch(()=>{});}catch{}} }
 
   // ---------- helper ----------
   function h(tag, attrs = {}, kids = []) {
@@ -56,7 +51,7 @@
       background: '#FFD700', // gold
       color: '#000',
       fontWeight: '600',
-      fontFamily: 'system-ui, sans-serif',
+      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif',
       zIndex: 999999,
       cursor: 'pointer',
       border: 'none'
@@ -80,94 +75,70 @@
       display: 'none',
       zIndex: 999999,
       color: '#fff',
-      fontFamily: 'system-ui, sans-serif',
-      boxSizing: 'border-box' // prevent cut-off
+      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif',
+      boxSizing: 'border-box'
     }
   });
 
-  // Header with mute toggle
+  // header
   const muteBtn = h('button', {
-    onclick: () => {
-      muted = !muted;
-      localStorage.setItem('lozano_chat_muted', muted ? '1' : '0');
-      muteBtn.textContent = muted ? '🔕' : '🔔';
-    },
+    onclick: () => { muted = !muted; localStorage.setItem('lozano_chat_muted', muted ? '1' : '0'); muteBtn.textContent = muted ? '🔕' : '🔔'; },
     title: 'Sound on/off',
-    style: {
-      color: '#fff',
-      background: 'transparent',
-      border: 0,
-      fontSize: '18px',
-      cursor: 'pointer',
-      marginRight: '8px'
-    }
+    style: { color:'#fff', background:'transparent', border:0, fontSize:'18px', cursor:'pointer', marginRight:'8px' }
   }, [muted ? '🔕' : '🔔']);
 
   const closeBtn = h('button', {
     onclick: toggle,
-    style: {
-      color: '#fff',
-      background: 'transparent',
-      border: '0',
-      fontSize: '18px',
-      cursor: 'pointer'
-    }
+    style: { color:'#fff', background:'transparent', border:0, fontSize:'18px', cursor:'pointer' }
   }, ['×']);
 
-  const headerRight = h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } }, [muteBtn, closeBtn]);
-
-  const headerLeft = h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } }, [
-    h('img', { src: AVATAR, alt: 'Martha', style: { width: '22px', height: '22px', borderRadius: '999px' } }),
+  const headerRight = h('div', { style: { display:'flex', alignItems:'center', gap:'6px' } }, [muteBtn, closeBtn]);
+  const headerLeft = h('div', { style: { display:'flex', alignItems:'center', gap:'8px' } }, [
+    h('img', { src: AVATAR, alt: 'Martha', style: { width:'22px', height:'22px', borderRadius:'999px' } }),
     h('div', {}, ['Chat'])
   ]);
 
   const header = h('div', {
     style: {
-      padding: '12px 16px',
-      background: '#2b2b2b',
-      color: '#fff',
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      fontSize: '16px',
-      fontWeight: '600',
-      boxSizing: 'border-box'
+      padding:'12px 16px',
+      background:'#2b2b2b',
+      color:'#fff',
+      display:'flex',
+      justifyContent:'space-between',
+      alignItems:'center',
+      fontSize:'16px',
+      fontWeight:'600',
+      boxSizing:'border-box'
     }
   }, [headerLeft, headerRight]);
 
   const body = h('div', {
     style: {
-      padding: '12px',
-      height: 'calc(100% - 120px)', // header + input
-      overflowY: 'auto',
-      fontSize: '14px',
-      lineHeight: '1.4',
-      boxSizing: 'border-box'
+      padding:'12px',
+      height:'calc(100% - 120px)', // header + input area
+      overflowY:'auto',
+      fontSize:'14px',
+      lineHeight:'1.4',
+      boxSizing:'border-box'
     }
   });
 
+  // input area (fix cut-off with box-sizing)
   const inputWrap = h('div', {
-    style: {
-      display: 'flex',
-      gap: '8px',
-      padding: '12px',
-      background: '#2b2b2b',
-      boxSizing: 'border-box'
-    }
+    style: { display:'flex', gap:'8px', padding:'12px', background:'#2b2b2b', boxSizing:'border-box' }
   });
 
   const input = h('input', {
     placeholder: 'Type your message…',
     style: {
-      flex: '1',
-      border: '1px solid #444',
-      borderRadius: '10px',
-      padding: '10px',
-      fontFamily: 'inherit',
-      fontSize: '14px',
-      background: '#fff',
-      color: '#000',
-      boxSizing: 'border-box'
+      flex:'1',
+      border:'1px solid #444',
+      borderRadius:'10px',
+      padding:'10px',
+      font:'14px/1.2 inherit',
+      background:'#fff',
+      color:'#000',
+      boxSizing:'border-box'
     },
     onkeydown: (e) => { if (e.key === 'Enter') sendMsg(); }
   });
@@ -175,14 +146,14 @@
   const send = h('button', {
     onclick: sendMsg,
     style: {
-      padding: '10px 14px',
-      borderRadius: '10px',
-      border: 'none',
-      background: '#FFD700', // gold
-      color: '#000',
-      fontWeight: '600',
-      cursor: 'pointer',
-      boxSizing: 'border-box'
+      padding:'10px 14px',
+      borderRadius:'10px',
+      border:'none',
+      background:'#FFD700', // gold
+      color:'#000',
+      fontWeight:'600',
+      cursor:'pointer',
+      boxSizing:'border-box'
     }
   }, ['Send']);
 
@@ -191,7 +162,7 @@
   document.body.append(launcher, panel);
 
   // ---------- behavior ----------
-  function toggle() {
+  function toggle(){
     open = !open;
     panel.style.display = open ? 'block' : 'none';
     if (open && msgs.length === 0) {
@@ -200,80 +171,43 @@
     localStorage.setItem('lozano_chat_open', open ? '1' : '0');
   }
 
-  function pushUser(t) {
-    msgs.push({ role: 'user', content: t });
-    draw('me', t);
-  }
+  function pushUser(t){ msgs.push({ role:'user', content:t }); draw('me', t); }
+  function pushBot(t){ msgs.push({ role:'assistant', content:t }); draw('bot', t); playChime(); }
 
-  function pushBot(t) {
-    msgs.push({ role: 'assistant', content: t });
-    draw('bot', t);
-    playChime();
-  }
-
-  function draw(who, text) {
-    // assistant row with avatar
-    if (who === 'bot') {
-      const row = h('div', { style: { display: 'flex', alignItems: 'flex-end', gap: '8px', margin: '8px 0' } }, [
-        h('img', { src: AVATAR, alt: 'Martha', style: { width: '20px', height: '20px', borderRadius: '999px' } }),
-        h('span', {
-          style: {
-            display: 'inline-block',
-            padding: '8px 10px',
-            borderRadius: '10px',
-            maxWidth: '80%',
-            background: '#333',
-            color: '#fff'
-          }
-        }, [text])
+  function draw(who, text){
+    if (who === 'bot'){
+      const row = h('div', { style:{ display:'flex', alignItems:'flex-end', gap:'8px', margin:'8px 0' } }, [
+        h('img', { src: AVATAR, alt:'Martha', style:{ width:'20px', height:'20px', borderRadius:'999px' } }),
+        h('span', { style:{
+          display:'inline-block', padding:'8px 10px', borderRadius:'10px', maxWidth:'80%', background:'#333', color:'#fff'
+        }}, [text])
       ]);
-      body.append(row);
-      body.scrollTop = body.scrollHeight;
-      return;
+      body.append(row); body.scrollTop = body.scrollHeight; return;
     }
-
-    // user bubble
-    const wrap = h('div', { style: { margin: '8px 0', textAlign: 'right' } }, [
-      h('span', {
-        style: {
-          display: 'inline-block',
-          padding: '8px 10px',
-          borderRadius: '10px',
-          maxWidth: '80%',
-          background: '#444',
-          color: '#fff'
-        }
-      }, [text])
+    const wrap = h('div', { style:{ margin:'8px 0', textAlign:'right' } }, [
+      h('span', { style:{
+        display:'inline-block', padding:'8px 10px', borderRadius:'10px', maxWidth:'80%', background:'#444', color:'#fff'
+      }}, [text])
     ]);
-    body.append(wrap);
-    body.scrollTop = body.scrollHeight;
+    body.append(wrap); body.scrollTop = body.scrollHeight;
   }
 
-  async function sendMsg() {
+  async function sendMsg(){
     const text = (input.value || '').trim();
     if (!text) return;
     input.value = '';
     pushUser(text);
 
     const payload = { sessionId, url: location.href, messages: msgs };
-
     try {
       const res = await fetch(API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-widget-signature': SIGN },
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'x-widget-signature': SIGN },
         body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (data.answer) pushBot(data.answer);
-
-      // Here’s where you could post data.meta.english_log + data.meta.language to your lead endpoint if you want.
-      // Example:
-      // if (data?.meta?.english_log) {
-      //   navigator.sendBeacon('/lead-capture-endpoint', JSON.stringify({
-      //     language: data.meta.language,
-      //     english_log: data.meta.english_log
-      //   }));
-      // }
+      // You can also read data.meta.language / data.meta.english_log here if you ever want UI badges/logs.
     } catch {
       pushBot('Hmm, connection issue. Try again in a moment.');
     }
@@ -290,4 +224,3 @@
     }
   });
 })();
-
