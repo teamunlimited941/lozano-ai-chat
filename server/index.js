@@ -73,21 +73,27 @@ function extractLeadFields(messages = []) {
   };
 }
 
-// ---------- Maria’s brain ----------
+// ---------- Martha’s brain (multilingual) ----------
 const systemPrompt = `
-You are Maria, Lozano Construction’s AI Receptionist/Assistant (FL GC: CGC1532629).
+You are Martha, Lozano Construction’s AI Receptionist/Assistant (FL GC: CGC1532629).
 
 Mission:
-- Be quick, helpful, witty (lightly), and professional.
+- Be quick, helpful, lightly witty, and professional.
 - Sound like a friendly neighbor who happens to be a pro builder.
-- Answer first, then ONE follow-up to guide the chat toward scheduling (by consent).
+- Always answer first; then ask ONE follow-up to guide toward scheduling (by consent).
+
+Language behavior:
+- Detect the user's language from their last message.
+- Reply in the user's language.
+- Also produce an English log string for the office CRM/Sheet.
 
 Tone:
-- Confident, concise, positive. Sprinkle humor only if it helps rapport.
+- Confident, concise, positive. A dash of wit if it helps rapport.
 - Adapt style: Driver → fast & direct, Analytical → step-by-step, Amiable → warm, Expressive → upbeat.
 
 Rules:
 - One follow-up question per turn.
+- Greeting guard: if they just say “hi/hello”, greet back and ask what they need.
 - General flow: greet → ask what they need → Name+Phone → Project specifics → Rapport → Address → Timeline → Plans → Budget → Offer 2 slots (only if they’re ready & willing; respect any day they mention) → Email last.
 - Never ask for more than one detail at once.
 - Never invent prices or availability.
@@ -95,12 +101,14 @@ Rules:
 
 Output STRICT JSON:
 {
-  "message": "ONE short, friendly bubble (answer + one follow-up).",
+  "message": "<ONE short friendly bubble in the user's language>",
+  "language": "<ISO 639-1 language code, e.g., en, es>",
+  "english_log": "<clean English summary of what was said this turn and any key details collected>",
   "scratchpad": { "intent": "...", "style_guess": "...", "confidence": 0.0, "next_step": "...", "pain_point": "...", "solution_given": "...", "followup_due": "..." }
 }
 `;
 
-// ---------- Chat endpoint (greeting guard + consent-based scheduling) ----------
+// ---------- Chat endpoint (greeting guard + consent-based scheduling + multilingual) ----------
 app.post("/api/chat", async (req, reply) => {
   try {
     const { messages = [], url } = req.body || {};
@@ -110,13 +118,14 @@ app.post("/api/chat", async (req, reply) => {
       return reply.send({
         answer: "Hi there! How can I help today—new project, repair, or something you’re planning?",
         persisted: false,
+        meta: { language: "en", english_log: "No key set; default greeting." }
       });
     }
 
     // Greeting guard inputs
     const lastUser = [...messages].reverse().find(m => m.role === "user");
     const lastText = (lastUser?.content || "").toString().trim();
-    const isGreeting = /\b(hi|hello|hey|good (morning|afternoon|evening))\b/i.test(lastText);
+    const isGreeting = /\b(hi|hello|hey|hola|buenas|good (morning|afternoon|evening))\b/i.test(lastText);
     const turns = messages.filter(m => m.role === "user").length;
 
     // Aggregate text
@@ -129,8 +138,8 @@ app.post("/api/chat", async (req, reply) => {
 
     // Availability hints (e.g., Monday morning)
     const availability = (() => {
-      const day = (textAll.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i) || [])[0];
-      const tod = (textAll.match(/\b(morning|afternoon|evening|night|am|pm)\b/i) || [])[0];
+      const day = (textAll.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|lunes|martes|miércoles|jueves|viernes|sábado|domingo)\b/i) || [])[0];
+      const tod = (textAll.match(/\b(morning|afternoon|evening|night|am|pm|mañana|tarde|noche)\b/i) || [])[0];
       return { day: day ? day.toLowerCase() : null, tod: tod ? tod.toLowerCase() : null };
     })();
 
@@ -138,7 +147,7 @@ app.post("/api/chat", async (req, reply) => {
     const lead = extractLeadFields(messages);
 
     // Consent to offer slots
-    const userAskedToSchedule = /\b(schedule|book|set (a )?time|appointment|meet|estimate|quote)\b/i.test(textAll);
+    const userAskedToSchedule = /\b(schedule|book|set (a )?time|appointment|meet|estimate|quote|agendar|cita|programar)\b/i.test(textAll);
     const allowedToOfferSlots =
       userAskedToSchedule ||
       (lead.hasAddress && lead.hasTimeline && lead.hasPlans && lead.hasBudget && refusals < 2 && !userSaidNoToSchedule);
@@ -170,7 +179,7 @@ app.post("/api/chat", async (req, reply) => {
     // Guidance for the model
     const availabilityHint = availability.day
       ? `User mentioned availability: ${availability.day}${availability.tod ? " (" + availability.tod + ")" : ""}. Prefer offering that day/time.`
-      : `If offering slots, suggest two options that match typical windows; if user named a day (e.g., Monday), prefer that.`;
+      : `If offering slots, suggest two options that match typical windows; if user named a day (e.g., Monday / Lunes), prefer that.`;
 
     const guidance = `
 Use light, tasteful wit only if it helps rapport. Be fast and professional.
@@ -178,6 +187,7 @@ Ask EXACTLY ONE follow-up this turn.
 nextGoal=${nextGoal}
 ${availabilityHint}
 User refusals so far: ${refusals}. If they refused scheduling, do NOT push slots—ask permission first or keep helping.
+Reply in the user's language. ALSO include an English log string.
 Never ask for more than one detail at once. Never contradict stated availability.
 `;
 
@@ -188,19 +198,17 @@ Never ask for more than one detail at once. Never contradict stated availability
       { role: "user", content: "Hello" },
       { role: "assistant", content: JSON.stringify({
           message: "Hi there! How can I help today—new project, repair, or something you’re planning?",
+          language: "en",
+          english_log: "Greeted visitor and asked what they need.",
           scratchpad: { next_step: "ask_project" }
         })
       },
-      { role: "user", content: "Do you build decks?" },
+      { role: "user", content: "¿Hacen terrazas?" },
       { role: "assistant", content: JSON.stringify({
-          message: "Absolutely—we love decks. Wood or composite is usually the big choice. What’s your name, and the best number in case we get disconnected?",
+          message: "¡Claro! Nos encantan las terrazas. ¿Cuál es tu nombre y el mejor número por si se corta la llamada?",
+          language: "es",
+          english_log: "Confirmed we build decks; asked for name and best phone.",
           scratchpad: { next_step: "ask_name_phone" }
-        })
-      },
-      { role: "user", content: "I don't want to share my phone yet." },
-      { role: "assistant", content: JSON.stringify({
-          message: "Totally fine—I respect your privacy. Tell me a bit about the project first. What are you planning?",
-          scratchpad: { next_step: "ask_project" }
         })
       }
     ];
@@ -218,12 +226,13 @@ Never ask for more than one detail at once. Never contradict stated availability
       messages: chatMessages,
       temperature: 0.45,
       response_format: { type: "json_object" },
-      max_tokens: 420,
+      max_tokens: 480,
     });
 
     const raw = completion.choices?.[0]?.message?.content || "{}";
     let parsed;
     try { parsed = JSON.parse(raw); } catch { parsed = { message: String(raw || "").trim() }; }
+
     let answer = (parsed && typeof parsed.message === "string" && parsed.message.trim())
       ? parsed.message.trim()
       : "Happy to help—what would you like to tackle first?";
@@ -249,19 +258,24 @@ Never ask for more than one detail at once. Never contradict stated availability
     }
 
     // Respect refusal and availability hints
-    if ((userSaidNoToSchedule || refusals >= 2) && /schedule|book|appointment|time|meet/i.test(answer)) {
+    if ((userSaidNoToSchedule || refusals >= 2) && /schedule|book|appointment|time|meet|cita|agendar/i.test(answer)) {
       answer = availability.day
         ? `All good—we can keep planning here. For later, does ${availability.day} ${availability.tod || "morning"} generally work for you?`
         : "All good—we can keep planning here and pencil something in later if you want.";
     }
-    if (nextGoal === "offer_slots" && availability.day && /wednesday|friday/i.test(answer)) {
+    if (nextGoal === "offer_slots" && availability.day && /wednesday|friday|miércoles|viernes/i.test(answer)) {
       answer = `Great—how does ${availability.day} ${availability.tod || "morning"} look for you?`;
     }
 
     return reply.send({
       answer,
       persisted: false,
-      meta: { scratchpad: parsed?.scratchpad ?? null, lead, nextGoal, availability, refusals }
+      meta: {
+        language: parsed?.language || "en",
+        english_log: parsed?.english_log || "",
+        scratchpad: parsed?.scratchpad ?? null,
+        lead, nextGoal, availability, refusals
+      }
     });
 
   } catch (err) {
@@ -269,6 +283,7 @@ Never ask for more than one detail at once. Never contradict stated availability
     return reply.code(200).send({
       answer: "All good—we can keep planning here. What part of the project would you like to sort out next?",
       persisted: false,
+      meta: { language: "en", english_log: "Server fallback reply." }
     });
   }
 });

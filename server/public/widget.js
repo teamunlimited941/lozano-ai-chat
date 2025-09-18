@@ -2,8 +2,17 @@
   const API = 'https://lozano-ai-chat-production.up.railway.app/api/chat';
   const SIGN = 'widget_dev';
 
+  // ---------- avatar ----------
+  // Replace with your hosted image if you like:
+  const AVATAR =
+    "data:image/svg+xml;charset=utf-8," +
+    encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'>
+      <rect width='100%' height='100%' rx='12' ry='12' fill='#FFD700'/>
+      <circle cx='32' cy='26' r='12' fill='#111'/>
+      <path d='M12 56c4-10 14-14 20-14s16 4 20 14' fill='#111'/>
+    </svg>`);
+
   // ---------- tiny chime (inline WAV) ----------
-  // 120ms soft beep; stored inline so we don't load external files.
   const CHIME_SRC =
     "data:audio/wav;base64,UklGRlQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAAAACAAACaW5mbyB3YXYgYmVlcAAA" +
     "AAAAAAB/////AAAAAP///wAAAP///wAAAP7+/v7+/v7+/v7+/////wAAAAD///8AAAAA/v7+/////wAAAP///wAAAP///wAAAAAA";
@@ -13,11 +22,7 @@
 
   function playChime() {
     if (muted) return;
-    try {
-      // Some browsers require reloading data URI to replay quickly
-      chimeEl.currentTime = 0;
-      chimeEl.play().catch(() => { /* ignore autoplay block */ });
-    } catch {}
+    try { chimeEl.currentTime = 0; chimeEl.play().catch(()=>{}); } catch {}
   }
 
   // ---------- helper ----------
@@ -75,7 +80,8 @@
       display: 'none',
       zIndex: 999999,
       color: '#fff',
-      fontFamily: 'system-ui, sans-serif'
+      fontFamily: 'system-ui, sans-serif',
+      boxSizing: 'border-box' // prevent cut-off
     }
   });
 
@@ -110,6 +116,11 @@
 
   const headerRight = h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } }, [muteBtn, closeBtn]);
 
+  const headerLeft = h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } }, [
+    h('img', { src: AVATAR, alt: 'Martha', style: { width: '22px', height: '22px', borderRadius: '999px' } }),
+    h('div', {}, ['Chat'])
+  ]);
+
   const header = h('div', {
     style: {
       padding: '12px 16px',
@@ -119,25 +130,30 @@
       justifyContent: 'space-between',
       alignItems: 'center',
       fontSize: '16px',
-      fontWeight: '600'
+      fontWeight: '600',
+      boxSizing: 'border-box'
     }
-  }, [
-    h('div', {}, ['Chat']),
-    headerRight
-  ]);
+  }, [headerLeft, headerRight]);
 
   const body = h('div', {
     style: {
       padding: '12px',
-      height: 'calc(100% - 120px)',
+      height: 'calc(100% - 120px)', // header + input
       overflowY: 'auto',
       fontSize: '14px',
-      lineHeight: '1.4'
+      lineHeight: '1.4',
+      boxSizing: 'border-box'
     }
   });
 
   const inputWrap = h('div', {
-    style: { display: 'flex', gap: '8px', padding: '12px', background: '#2b2b2b' }
+    style: {
+      display: 'flex',
+      gap: '8px',
+      padding: '12px',
+      background: '#2b2b2b',
+      boxSizing: 'border-box'
+    }
   });
 
   const input = h('input', {
@@ -150,7 +166,8 @@
       fontFamily: 'inherit',
       fontSize: '14px',
       background: '#fff',
-      color: '#000' // black text
+      color: '#000',
+      boxSizing: 'border-box'
     },
     onkeydown: (e) => { if (e.key === 'Enter') sendMsg(); }
   });
@@ -164,7 +181,8 @@
       background: '#FFD700', // gold
       color: '#000',
       fontWeight: '600',
-      cursor: 'pointer'
+      cursor: 'pointer',
+      boxSizing: 'border-box'
     }
   }, ['Send']);
 
@@ -177,7 +195,7 @@
     open = !open;
     panel.style.display = open ? 'block' : 'none';
     if (open && msgs.length === 0) {
-      pushBot("Hi! This is Maria with Lozano Construction. What can I help you with?");
+      pushBot("Hi! This is Martha with Lozano Construction. What can I help you with?");
     }
     localStorage.setItem('lozano_chat_open', open ? '1' : '0');
   }
@@ -194,16 +212,35 @@
   }
 
   function draw(who, text) {
-    const wrap = h('div', {
-      style: { margin: '8px 0', textAlign: who === 'me' ? 'right' : 'left' }
-    }, [
+    // assistant row with avatar
+    if (who === 'bot') {
+      const row = h('div', { style: { display: 'flex', alignItems: 'flex-end', gap: '8px', margin: '8px 0' } }, [
+        h('img', { src: AVATAR, alt: 'Martha', style: { width: '20px', height: '20px', borderRadius: '999px' } }),
+        h('span', {
+          style: {
+            display: 'inline-block',
+            padding: '8px 10px',
+            borderRadius: '10px',
+            maxWidth: '80%',
+            background: '#333',
+            color: '#fff'
+          }
+        }, [text])
+      ]);
+      body.append(row);
+      body.scrollTop = body.scrollHeight;
+      return;
+    }
+
+    // user bubble
+    const wrap = h('div', { style: { margin: '8px 0', textAlign: 'right' } }, [
       h('span', {
         style: {
           display: 'inline-block',
           padding: '8px 10px',
           borderRadius: '10px',
-          maxWidth: '85%',
-          background: who === 'me' ? '#444' : '#333',
+          maxWidth: '80%',
+          background: '#444',
           color: '#fff'
         }
       }, [text])
@@ -228,6 +265,15 @@
       });
       const data = await res.json();
       if (data.answer) pushBot(data.answer);
+
+      // Here’s where you could post data.meta.english_log + data.meta.language to your lead endpoint if you want.
+      // Example:
+      // if (data?.meta?.english_log) {
+      //   navigator.sendBeacon('/lead-capture-endpoint', JSON.stringify({
+      //     language: data.meta.language,
+      //     english_log: data.meta.english_log
+      //   }));
+      // }
     } catch {
       pushBot('Hmm, connection issue. Try again in a moment.');
     }
@@ -244,3 +290,4 @@
     }
   });
 })();
+
