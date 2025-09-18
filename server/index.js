@@ -10,7 +10,7 @@ const __dirname = dirname(__filename);
 
 const app = Fastify({ logger: true });
 
-// Static (serves /widget.js)
+// Serve /widget.js
 app.register(fastifyStatic, {
   root: join(__dirname, "public"),
   prefix: "/",
@@ -20,14 +20,65 @@ app.register(fastifyStatic, {
 // Health
 app.get("/health", async () => ({ ok: true, ts: Date.now() }));
 
-// Minimal CORS (optional; add your real domains in env for production)
+// CORS (so the widget on your domain can call the API)
 app.addHook("onRequest", async (req, reply) => {
   reply.header("Access-Control-Allow-Origin", req.headers.origin || "*");
   reply.header("Access-Control-Allow-Headers", "Content-Type, x-widget-signature");
 });
-app.options("/*", async (req, reply) => {
-  reply.code(204).send();
-});
+app.options("/*", async (req, reply) => reply.code(204).send());
+
+// Maria’s receptionist persona (empathetic + human phrasing)
+const systemPrompt = `
+You are Maria, Lozano Construction’s AI Receptionist/Assistant (FL GC: CGC1532629).
+
+Mission:
+- Be the visitor’s trusted neighbor, not just a note-taker or salesperson.
+- Adapt to each person’s personality and emotional state (chameleon style).
+- Earn trust by listening deeply, reflecting back what you heard, and offering clear next steps that reduce pain and add value.
+
+Core Behaviors:
+- Empathy First: acknowledge feelings before facts. If stressed, mirror tone and reassure (“I hear how urgent this feels—let’s solve it together.”).
+- Pain → Solution Flow: identify the problem in their words, then frame your reply around the relief/solution we provide.
+- Mirror & Repeat: occasionally rephrase their key points (“Just to confirm, the leak started last night near the kitchen window, right?”).
+- Versatile Selling (detect & adapt):
+  - Drivers → fast, bottom-line first
+  - Analyticals → detailed, step-by-step
+  - Amiables → warm reassurance, safety
+  - Expressives → enthusiastic, outcome-focused
+
+Non-Negotiables:
+- Never invent pricing, permits, or scheduling availability. Use confirmed tools/KB or escalate to a human.
+- Always summarize before moving forward.
+- Present two clear next-step options (time slots, follow-up methods).
+- If confidence < 0.6 or compliance risk → hand off to a human immediately.
+
+Tone:
+- Confident neighbor who’s also an expert builder.
+- Concise but human. Never robotic or pushy.
+- Leave them feeling understood, reassured, and clear on next steps.
+
+Conversation policy:
+1) **Answer their question first** (e.g., “Yes, we build decks…” or “We don’t do that, but here’s what we *can* help with…”).
+2) Then **collect details with human phrasing** (not scripts):
+   - “Can I please get your full address (street, city, state, ZIP)?”
+   - “What’s the best phone number to reach you?”
+   - “Is there a good email to send estimates and reports to?”
+3) Offer **two scheduling choices** (e.g., “Would tomorrow or Thursday work better? Morning or late afternoon?”).
+4) Summarize and confirm in their words.
+5) Output **JSON only** (no prose), shape:
+{
+  "message": "one or two short chat bubbles as a single string",
+  "scratchpad": {
+    "intent": "...",
+    "style_guess": "Driver | Analytical | Amiable | Expressive | Unknown",
+    "confidence": 0.0,
+    "next_step": "...",
+    "pain_point": "...",
+    "solution_given": "...",
+    "followup_due": "..."
+  }
+}
+`;
 
 // Chat endpoint
 app.post("/api/chat", async (req, reply) => {
@@ -35,51 +86,77 @@ app.post("/api/chat", async (req, reply) => {
     const { messages = [], sessionId, url } = req.body || {};
     const openaiKey = process.env.OPENAI_API_KEY;
 
-    // Friendly fallback if no key
+    // Friendly fallback if no OpenAI key set yet
     if (!openaiKey) {
       return reply.send({
         answer:
-          "Hi! I’m Maria with Lozano Construction. Share your city/ZIP, a best number, and a quick description (kitchen, bath, addition, roofing/soffit, concrete, etc.). I’ll get you scheduled.",
+          "Absolutely—happy to help. Do you mind sharing your full address (street, city, state, ZIP), the best phone number, and a good email to send estimates/reports? Then I can get you scheduled. Would tomorrow or Thursday work better—mornings or late afternoon?",
         persisted: false,
       });
     }
 
     const openai = new OpenAI({ apiKey: openaiKey });
 
-    // Build a safe, human-sounding prompt
-    const systemPrompt =
-      "You are Maria, a friendly human concierge for Lozano Construction (FL GC CGC1532629). " +
-      "Write brief, helpful messages in plain language—sound like a person, not a bot. " +
-      "Ask 1–2 questions at a time. Prioritize: name, city or ZIP, best phone and email, and project details (kitchen, bath, addition, roofing/soffit, concrete, etc.). " +
-      "Offer to schedule a site visit. Keep it concise.";
-
     const chatMessages = [
       { role: "system", content: systemPrompt },
-      ...messages.map((m) => ({ role: m.role, content: String(m.content || "") })),
-      // (optional) you can give Maria context about page URL:
+      ...messages.map(m => ({ role: m.role, content: String(m.content || "") })),
       { role: "system", content: `Page: ${url || "unknown"}` },
     ];
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // fast + cost-effective
+      model: "gpt-4o-mini",
       messages: chatMessages,
       temperature: 0.5,
+      response_format: { type: "json_object" },
+      max_tokens: 450,
     });
 
-    const answer = completion.choices?.[0]?.message?.content?.trim() || "Thanks! Tell me your city/ZIP and best phone—I'll get you scheduled.";
+    const raw = completion.choices?.[0]?.message?.content || "{}";
 
-    reply.send({ answer, persisted: false });
+    let data;
+    try { data = JSON.parse(raw); }
+    catch {
+      data = {
+        message:
+          "Got it. Could I please have your full address (street, city, state, ZIP), best phone, and a good email to send estimates? Would tomorrow or Thursday work better—morning or late afternoon?",
+        scratchpad: {
+          intent: "fallback",
+          style_guess: "Unknown",
+          confidence: 0.55,
+          next_step: "Collect contact + address; offer two scheduling windows",
+          pain_point: "Unknown",
+          solution_given: "Reassurance + clear next steps",
+          followup_due: "Schedule visit",
+        },
+      };
+    }
+
+    return reply.send({
+      answer: String(data.message || "").trim() ||
+        "Happy to help. What’s your full address (street, city, state, ZIP), best phone, and good email? Would tomorrow or Thursday work better—AM or late afternoon?",
+      persisted: false,
+      meta: { scratchpad: data.scratchpad || null },
+    });
   } catch (err) {
     req.log.error(err);
-    reply.code(200).send({
+    return reply.code(200).send({
       answer:
-        "Thanks! Mind sharing your city/ZIP and a good phone number? I’ll text you to lock a time.",
+        "Understood. Can I grab your full address (street, city, state, ZIP), best phone, and a good email? Then I’ll get you scheduled—would tomorrow or Thursday work better, mornings or late afternoon?",
       persisted: false,
     });
   }
 });
 
+// diag: lets us confirm env is visible in Railway without leaking secrets
+app.get("/diag", async () => ({
+  ok: true,
+  openaiKeyDetected: !!process.env.OPENAI_API_KEY,
+  port: Number(process.env.PORT || 8080)
+}));
+
+// ---- start server (Railway expects you to listen on PORT) ----
 const port = Number(process.env.PORT || 8080);
 app.listen({ port, host: "0.0.0.0" })
   .then(() => app.log.info(`API up on :${port}`))
   .catch((e) => { app.log.error(e); process.exit(1); });
+
