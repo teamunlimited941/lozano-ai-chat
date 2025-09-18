@@ -1,4 +1,5 @@
 ﻿(() => {
+  // ---------- helpers ----------
   function onReady(fn){ if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn); else fn(); }
   function h(tag, attrs = {}, children = []) {
     const el = document.createElement(tag);
@@ -11,48 +12,11 @@
     return el;
   }
 
-  const API  = 'https://lozano-ai-chat-production.up.railway.app/api/chat';
-  const SIGN = 'widget_dev';
-  const AGENT_NAME = 'Maria • Lozano Construction';
-
-  onReady(() => {
-    if (document.getElementById('lozano-chat-launcher')) return;
-
-    let open = false;
-    let msgs = [];
-    const sessionId = crypto.randomUUID();
-
-    const launcher = h('button', {
-      id: 'lozano-chat-launcher',
-      onclick: toggle,
-      style: {
-        position:'fixed', right:'16px', bottom:'16px',
-        borderRadius:'9999px', padding:'14px 18px',
-        boxShadow:'0 10px 25px rgba(0,0,0,.15)',
-        background:'#0f172a', color:'#fff', zIndex: 999999,
-        cursor:'pointer', border:'0', fontFamily:'system-ui'
-      }
-    }, ['Chat with Lozano AI']);
-
-    (() => {
-  // ---- helpers ----
-  function onReady(fn){ if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn); else fn(); }
-  function h(tag, attrs = {}, children = []) {
-    const el = document.createElement(tag);
-    for (const [k, v] of Object.entries(attrs || {})) {
-      if (k === 'style' && v && typeof v === 'object') Object.assign(el.style, v);
-      else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
-      else el.setAttribute(k, v);
-    }
-    for (const c of [].concat(children || [])) el.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
-    return el;
-  }
-
-  // ---- theme knobs (easy to tweak) ----
+  // ---------- theme & config ----------
   const COLORS = {
     brandDark: '#0f172a',
-    gold: '#f2c200',              // launcher button (yellow-gold)
-    userBubbleBg: '#2d2d2d',      // dark gray user bubble
+    gold: '#f2c200',          // launcher button (yellow-gold)
+    userBubbleBg: '#2d2d2d',  // dark gray user bubble
     userBubbleText: '#ffffff',
     agentBubbleBg: '#ffffff',
     agentBubbleText: '#1f2937',
@@ -61,18 +25,24 @@
     border: '#e5e7eb',
   };
   const FONT_STACK = "Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji'";
+
   const AGENT_NAME = 'Maria • Lozano Construction';
   const API  = 'https://lozano-ai-chat-production.up.railway.app/api/chat';
   const SIGN = 'widget_dev';
 
+  // Auto-open once per visit (suppresses until tab/window is closed)
+  const AUTO_OPEN_DELAY_MS = 1500;
+  const KEY_SUPPRESS_THIS_VISIT = 'lozano_chat_suppress_this_visit';
+
   onReady(() => {
-    if (document.getElementById('lozano-chat-launcher')) return; // avoid duplicates
+    // prevent duplicate injection
+    if (document.getElementById('lozano-chat-launcher')) return;
 
     let open = false;
     let msgs = [];
     const sessionId = crypto.randomUUID();
 
-    // ---- launcher ----
+    // ---------- launcher ----------
     const launcher = h('button', {
       id: 'lozano-chat-launcher',
       onclick: toggle,
@@ -81,11 +51,15 @@
         borderRadius:'9999px', padding:'14px 18px',
         boxShadow:'0 10px 25px rgba(0,0,0,.15)',
         background: COLORS.gold, color:'#111', zIndex: 999999,
-        cursor:'pointer', border:'0', fontFamily: FONT_STACK, fontWeight:'600'
+        cursor:'pointer', border:'0', fontFamily: FONT_STACK, fontWeight:'600',
+        transition:'transform .2s ease'
       }
     }, ['Chat with us']);
 
-    // ---- panel ----
+    // subtle attention nudge
+    setTimeout(() => { launcher.style.transform = 'scale(1.04)'; setTimeout(()=> launcher.style.transform='scale(1)', 300); }, 1000);
+
+    // ---------- panel ----------
     const panel = h('div', {
       id: 'lozano-chat-panel',
       style: {
@@ -99,7 +73,7 @@
       }
     });
 
-    // ---- header ----
+    // ---------- header ----------
     const header = h('div', { style: {
       padding:'12px 16px', background: COLORS.brandDark, color:'#fff',
       display:'flex', justifyContent:'space-between', alignItems:'center'
@@ -108,17 +82,22 @@
         h('strong', { style:{ letterSpacing:'.2px' } }, ['Chat']),
         h('div', { style:{ fontSize:'12px', opacity:.85, marginTop:'2px' }}, [AGENT_NAME])
       ]),
-      h('button', { onclick: toggle, style: { color:'#fff', background:'transparent', border:'0', fontSize:'18px', cursor:'pointer' } }, ['×'])
+      h('button', { title:'Minimize', onclick: minimize, style: { color:'#fff', background:'transparent', border:'0', fontSize:'18px', cursor:'pointer' } }, ['×'])
     ]);
 
-    // ---- body ----
+    // ---------- body ----------
     const body = h('div', { id:'lozano-chat-body', style: {
       flex:'1', padding:'12px', overflow:'auto',
       fontSize:'14px', lineHeight:'1.45', WebkitOverflowScrolling:'touch',
       background: COLORS.bodyBg
     }});
 
-    // ---- input area (textarea like Messages) ----
+    // typing indicator
+    const typing = h('div', { id:'lozano-typing', style: {
+      display:'none', margin:'6px 0', fontSize:'12px', color:'#6b7280'
+    }}, ['Maria is typing…']);
+
+    // ---------- input ----------
     const inputWrap = h('div', { style: {
       display:'flex', gap:'8px', padding:'10px',
       paddingBottom:'calc(10px + env(safe-area-inset-bottom))',
@@ -134,7 +113,7 @@
         padding:'10px 12px',
         fontFamily: FONT_STACK,
         fontSize:'14px',
-        color:'#111',               // black text inside the box
+        color:'#111',               // black text
         background:'#fff',
         resize:'none', outline:'none',
         maxHeight:'120px', lineHeight:'1.35',
@@ -158,10 +137,10 @@
     }, ['Send']);
 
     inputWrap.append(ta, send);
-    panel.append(header, body, inputWrap);
+    panel.append(header, body, typing, inputWrap);
     document.body.append(launcher, panel);
 
-    // ---- mobile layout ----
+    // ---------- mobile layout ----------
     function applyMobileLayout() {
       const isMobile = window.matchMedia('(max-width: 640px)').matches;
       if (isMobile) {
@@ -192,7 +171,7 @@
       ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
     }
 
-    // ---- message helpers ----
+    // ---------- bubbles ----------
     function bubble(text, opts){
       const wrap = h('div', { style: {
         margin:'8px 0', display:'flex', justifyContent: (opts.right ? 'flex-end':'flex-start')
@@ -210,22 +189,46 @@
     function pushUser(t){ msgs.push({ role:'user', content:t }); body.appendChild(bubble(t, { right:true, bg:COLORS.userBubbleBg, color:COLORS.userBubbleText })); body.scrollTop = body.scrollHeight; }
     function pushAgent(t){ msgs.push({ role:'assistant', content:t }); body.appendChild(bubble(t, { right:false, bg:COLORS.agentBubbleBg, color:COLORS.agentBubbleText, border:COLORS.border })); body.scrollTop = body.scrollHeight; }
 
-    // ---- open/close ----
+    // ---------- minimize / toggle / open ----------
+    function minimize(){
+      open = false;
+      panel.style.display = 'none';
+      // suppress auto-open for the rest of this visit
+      try { sessionStorage.setItem(KEY_SUPPRESS_THIS_VISIT, '1'); } catch {}
+    }
     function toggle(){
       open = !open;
-      panel.style.display = open ? 'flex' : 'none';
-      if (open && msgs.length === 0) {
+      if (open) openPanel();
+      else minimize();
+    }
+    function openPanel(){
+      panel.style.display = 'flex';
+      if (msgs.length === 0) {
         // softer, human opener
         pushAgent("Hi! This is Maria with Lozano Construction. What can I help you with?");
       }
     }
 
-    // ---- send ----
+    // ---------- auto-open once per visit ----------
+    (function maybeAutoOpen(){
+      let suppressed = false;
+      try { suppressed = sessionStorage.getItem(KEY_SUPPRESS_THIS_VISIT) === '1'; } catch {}
+      if (!suppressed) {
+        setTimeout(() => {
+          if (!open) { open = true; openPanel(); }
+        }, AUTO_OPEN_DELAY_MS);
+      }
+    })();
+
+    // ---------- sending ----------
     async function sendMsg(){
       const text = (ta.value || '').trim();
       if (!text) return;
       ta.value = ''; autoGrow();
       pushUser(text);
+
+      // typing indicator for realism
+      typing.style.display = 'block';
 
       const payload = { sessionId, url: location.href, messages: msgs };
       try {
@@ -235,12 +238,15 @@
           body: JSON.stringify(payload)
         });
         const data = await res.json();
+        typing.style.display = 'none';
         if (data.answer)    pushAgent(data.answer);
         if (data.persisted) pushAgent('Perfect — I’ll text/email you shortly to lock a time.');
       } catch {
+        typing.style.display = 'none';
         pushAgent('Hmm, connection issue on my side. Mind trying again in a moment?');
       }
     }
   });
 })();
+
 
